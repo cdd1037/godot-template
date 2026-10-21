@@ -1,0 +1,102 @@
+name: Windows-only MSVC slim .NET release
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-msvc-release.yml'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'New tag (4.7.2-windows-msvc.N); blank uses run number'
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: windows-msvc-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build-windows:
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONIOENCODING: utf8
+      SCONS_CACHE_MSVC_CONFIG: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out pinned engine
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ed1daf0bf001b61586d9930840f2f1394092c079
+          path: engine
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install pinned build orchestrator
+        run: |
+          python -m pip install scons==4.10.1
+          if ($LASTEXITCODE -ne 0) { throw 'SCons installation failed' }
+      - name: Compile Windows x86_64 with MSVC (no engine execution)
+        run: ./artifacts/desktop-release-plan/build-windows-msvc.ps1
+      - name: Upload Windows release templates
+        uses: actions/upload-artifact@v4
+        with:
+          name: templates-windows-msvc
+          path: dist/assets/*
+          if-no-files-found: error
+      - name: Upload separate build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-windows-msvc
+          path: dist/evidence/
+          if-no-files-found: warn
+          retention-days: 30
+  publish:
+    needs: build-windows
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: templates-windows-msvc
+          path: release-assets
+      - name: Publish a new Windows-only release (never overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${REQUESTED_TAG:-4.7.2-windows-msvc.${GITHUB_RUN_NUMBER}}"
+          [[ "$tag" =~ ^4\.7\.2-windows-msvc\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          git fetch --tags origin
+          ! git rev-parse -q --verify "refs/tags/$tag" || { echo 'Tag already exists; choose a new suffix'; exit 1; }
+          cat > RELEASE_NOTES_WINDOWS.md <<EOF_NOTES
+          Windows-only Godot 4.7.2 slim .NET Release export templates, source \`ed1daf0bf001b61586d9930840f2f1394092c079\`.
+
+          - Native Visual Studio 2022 MSVC x86_64, speed optimization and full LTO, static C++ runtime. No bundled .NET runtime.
+          - Same trim6 functional configuration: Graphite and public 3D API retained, AccessKit disabled, Compatibility/native OpenGL only; no Vulkan, D3D12, ANGLE or Metal.
+          - Download \`windows_release_x86_64.exe\` and \`windows_release_x86_64.console.exe\`; keep both together. In the matching Godot 4.7.2 .NET editor select the main EXE as Custom Template → Release and export with debug disabled. Use matching GodotSharp assemblies and normal managed publish output.
+          - Linux/macOS were not rebuilt. Their existing assets remain in [4.7.2-slim.1](https://github.com/${GITHUB_REPOSITORY}/releases/tag/4.7.2-slim.1); that release is unchanged.
+          - \`SHA256SUMS\` verifies the Windows EXE pair. Native linker MAP files and any incidental PDBs remain separate in the Actions evidence artifact (30-day retention); release uses \`debug_symbols=no\` and MSVC \`/DEBUG:NONE\`, not GNU strip.
+          - Compile/package only: no game launches, runtime tests or size comparisons.
+          EOF_NOTES
+          cd release-assets
+          test -s windows_release_x86_64.exe
+          test -s windows_release_x86_64.console.exe
+          test -s windows.sha256
+          cp windows.sha256 SHA256SUMS
+          sha256sum -c SHA256SUMS
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Godot 4.7.2 slim .NET Windows MSVC — ${tag}" \
+            --notes-file ../RELEASE_NOTES_WINDOWS.md \
+            windows_release_x86_64.exe windows_release_x86_64.console.exe SHA256SUMS
