@@ -1,0 +1,12 @@
+{
+  "source_commit": "ed1daf0bf001b61586d9930840f2f1394092c079",
+  "containers_commit": "3f3cc50c3f91c2be66e37aece9d9a57284e39db7",
+  "release_scripts_commit": "63625f75c0f869dea4a01811522e10fefcd0f322",
+  "release_branch": "4.7",
+  "linux_sdk_generation": "godot-2023.08.x-4",
+  "linux_glibc_baseline": "2.28",
+  "macos_sdk": "26.1",
+  "macos_xcode": "26.1.1",
+  "note": "Linux/Windows use pinned official 4.7 Dockerfile recipes, not bit-reproducible official images: upstream Fedora tags/packages remain mutable. macOS uses approved native Xcode, not official osxcross binaries.",
+  "macos_mode": "User-approved GitHub macos-15 ARM64 runner, native Xcode 26.1.1 (17B100), SDK 26.1"
+}
