@@ -1,0 +1,159 @@
+{
+  "source_commit": "ed1daf0bf001b61586d9930840f2f1394092c079",
+  "date": "2026-10-21",
+  "units": "1 MiB = 1048576 bytes; bytes describe individual files, not memory usage",
+  "notes": [
+    "Local experiments are not all publicly archived; hashes identify retained evidence but do not make missing artifacts publicly reproducible.",
+    "Do not add savings from experiments with overlapping baselines.",
+    "Windows compiler comparison also changes toolchain/platform; not a universal compiler-only percentage."
+  ],
+  "measurements": [
+    {
+      "id": "initial",
+      "bytes": 60077624,
+      "mib": 57.294487,
+      "sha256": "d639e9224303e42cc93e869822f1ddbed0f28d4ce8d9780a5959e461091f8241",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": null
+    },
+    {
+      "id": "trim3",
+      "bytes": 58209688,
+      "mib": 55.513084,
+      "sha256": "f3acf4a55606e681c30f1dbb2ca9f510092c3995ed256b7139b20716d60d02c3",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "initial",
+      "saved_bytes": 1867936,
+      "saved_mib": 1.781403
+    },
+    {
+      "id": "trim4",
+      "bytes": 56579384,
+      "mib": 53.958305,
+      "sha256": "356856ec2e6af5677ebb73c81abd79a62a05ca0dbfc7361e3f6aedbf905740d4",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim3",
+      "saved_bytes": 1630304,
+      "saved_mib": 1.554779
+    },
+    {
+      "id": "trim5",
+      "bytes": 56390968,
+      "mib": 53.778618,
+      "sha256": "4b95fe48a7aa72442e583837f243b6c6e255268782d818c0b7263835cce6640a",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim4",
+      "saved_bytes": 188416,
+      "saved_mib": 0.179688
+    },
+    {
+      "id": "trim6",
+      "bytes": 56153400,
+      "mib": 53.552055,
+      "sha256": "4393d4c58a384dcec2690343aa192594ef47e27907ff3b099efefd94444d2c46",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim5",
+      "saved_bytes": 237568,
+      "saved_mib": 0.226562
+    },
+    {
+      "id": "no_graphite",
+      "bytes": 56022264,
+      "mib": 53.426994,
+      "sha256": "a74aa199a2a594d131b6bb67ab320073f2f476eae19d7a6ea2ece7e3ef41ce89",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim6",
+      "saved_bytes": 131136,
+      "saved_mib": 0.125061
+    },
+    {
+      "id": "eight_3d_leaves",
+      "bytes": 55715128,
+      "mib": 53.134087,
+      "sha256": "02a5df3e64ed700ac6ebb4bd2ae2a27f494c8e40474339bedc069923cf3dde84",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim6",
+      "saved_bytes": 438272,
+      "saved_mib": 0.417969
+    },
+    {
+      "id": "relr",
+      "bytes": 53204352,
+      "mib": 50.739624,
+      "sha256": "8abe84bbaab1f0c185ae762e12947d4a0aa3950ca6ada16c5684f47b3fe89da9",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim6",
+      "saved_bytes": 2949048,
+      "saved_mib": 2.812431
+    },
+    {
+      "id": "whitelist_equivalent",
+      "bytes": 56153400,
+      "mib": 53.552055,
+      "sha256": "cfcc9df6a60b910981936e5c1bda87c952cc9c37e2770ae94f9285562d3f0af0",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "trim6",
+      "saved_bytes": 0,
+      "saved_mib": 0.0
+    },
+    {
+      "id": "whitelist_four_modules_removed",
+      "bytes": 55849912,
+      "mib": 53.262627,
+      "sha256": "d957e121dcaa16ba20bde22d21759f2af082ad89b8465ed0feea472299a94b28",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "whitelist_equivalent",
+      "saved_bytes": 303488,
+      "saved_mib": 0.289429
+    },
+    {
+      "id": "linux_release",
+      "bytes": 50897816,
+      "mib": 48.53994,
+      "sha256": "1ec99d80e574a374edb4520582571f3719e83bd9dc50494636f5e41dd9c96494",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": null
+    },
+    {
+      "id": "windows_mingw_release",
+      "bytes": 68329984,
+      "mib": 65.164551,
+      "sha256": "95e314856a827c7ea6405f32bac9cbc3b231a1c7d05919f29291832b4cd74898",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": null
+    },
+    {
+      "id": "windows_msvc_release",
+      "bytes": 53087232,
+      "mib": 50.62793,
+      "sha256": "31b0afa709be64daf0f340ddfc59ba16af39a22fd2d198540f8ca99e5af89388",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": "windows_mingw_release",
+      "saved_bytes": 15242752,
+      "saved_mib": 14.536621
+    },
+    {
+      "id": "windows_msvc_console",
+      "bytes": 292864,
+      "mib": 0.279297,
+      "sha256": "85da8f5b7bd751465ec4249db2646a386ebbe0926775ea020255e6d020e57960",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": null
+    },
+    {
+      "id": "macos_zip",
+      "bytes": 16404787,
+      "mib": 15.644824,
+      "sha256": "b15b7898c57fab01bb82bed738e17a9dd87bbef1b76846dbb8360d07328d2806",
+      "verification": "Retained local artifact stat and SHA256, rechecked 2026-10-21; no execution",
+      "comparison_baseline": null
+    },
+    {
+      "id": "macos_raw_executable",
+      "bytes": 47477352,
+      "mib": 45.277931,
+      "sha256": "124d7c92928ddac5323b63a56fdf5a36c6d4e2a63e03dcca87d3918d9dada800",
+      "verification": "Read archive member, no execution"
+    }
+  ]
+}
