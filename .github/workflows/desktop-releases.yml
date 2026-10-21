@@ -1,0 +1,111 @@
+name: Slim .NET desktop release templates (official toolchains)
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/desktop-releases.yml'
+      - 'artifacts/desktop-release-plan/**'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'New tag (4.7.2-slim.N); blank uses run number'
+        required: false
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux
+            runner: ubuntu-24.04
+          - platform: windows
+            runner: ubuntu-24.04
+          - platform: macos
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out pinned engine
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ed1daf0bf001b61586d9930840f2f1394092c079
+          path: engine
+          persist-credentials: false
+      - name: Check out official release container recipes (4.7)
+        if: matrix.platform != 'macos'
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/build-containers
+          ref: 3f3cc50c3f91c2be66e37aece9d9a57284e39db7
+          path: official-containers
+          persist-credentials: false
+      - name: Build Linux/Windows using official container recipes
+        if: matrix.platform != 'macos'
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: bash artifacts/desktop-release-plan/run-container.sh "$PLATFORM"
+      - name: Set up Python for pinned SCons
+        if: matrix.platform == 'macos'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build Apple Silicon using approved native Xcode 26.1.1
+        if: matrix.platform == 'macos'
+        run: bash artifacts/desktop-release-plan/build-macos.sh
+      - name: Upload release templates
+        uses: actions/upload-artifact@v4
+        with:
+          name: templates-${{ matrix.platform }}
+          path: dist/assets/*
+          if-no-files-found: error
+      - name: Upload build evidence (not template assets)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: evidence-${{ matrix.platform }}
+          path: dist/evidence/
+          if-no-files-found: warn
+          retention-days: 30
+  publish:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: templates-*
+          merge-multiple: true
+          path: release-assets
+      - name: Publish a new release (never overwrite)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_TAG: ${{ inputs.release_tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="${REQUESTED_TAG:-4.7.2-slim.${GITHUB_RUN_NUMBER}}"
+          [[ "$tag" =~ ^4\.7\.2-slim\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
+          # The create API itself refuses an existing release; also reject an existing tag.
+          git fetch --tags origin
+          ! git rev-parse -q --verify "refs/tags/$tag" || { echo 'Tag already exists; choose a new suffix'; exit 1; }
+          cd release-assets
+          test -f windows_release_x86_64.exe
+          test -f windows_release_x86_64.console.exe
+          test -f linux_release.x86_64
+          test -f macos_release.arm64.mono.zip
+          cat linux.sha256 windows.sha256 macos.sha256 > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+            --title "Godot 4.7.2 slim .NET — ${tag}" \
+            --notes-file ../artifacts/desktop-release-plan/RELEASE_NOTES.md \
+            windows_release_x86_64.exe windows_release_x86_64.console.exe linux_release.x86_64 macos_release.arm64.mono.zip SHA256SUMS
