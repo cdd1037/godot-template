@@ -1,0 +1,69 @@
+name: Consolidate existing desktop release assets
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/consolidate-desktop-release.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: consolidate-4.7.2-slim.2
+  cancel-in-progress: false
+jobs:
+  consolidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Download and verify existing release assets (no rebuild)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p assets
+          gh release download 4.7.2-slim.1 --dir assets \
+            --pattern linux_release.x86_64 --pattern macos_release.arm64.mono.zip
+          gh release download 4.7.2-windows-msvc.1 --dir assets \
+            --pattern windows_release_x86_64.exe --pattern windows_release_x86_64.console.exe
+          cat > assets/SHA256SUMS <<'SUMS'
+          1ec99d80e574a374edb4520582571f3719e83bd9dc50494636f5e41dd9c96494  linux_release.x86_64
+          b15b7898c57fab01bb82bed738e17a9dd87bbef1b76846dbb8360d07328d2806  macos_release.arm64.mono.zip
+          31b0afa709be64daf0f340ddfc59ba16af39a22fd2d198540f8ca99e5af89388  windows_release_x86_64.exe
+          85da8f5b7bd751465ec4249db2646a386ebbe0926775ea020255e6d020e57960  windows_release_x86_64.console.exe
+          SUMS
+          (cd assets && sha256sum -c SHA256SUMS)
+      - name: Publish unified release without changing historical releases
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=4.7.2-slim.2
+          # The release-create API refuses to overwrite an existing release.
+          cat > RELEASE_NOTES.md <<'NOTES'
+          Unified Godot 4.7.2 slim .NET Release export templates for Windows x64, Linux x64 and macOS Apple Silicon.
+
+          This release consolidates existing verified binaries; nothing was rebuilt or executed.
+
+          - Windows x64: native Visual Studio 2022 MSVC, copied byte-for-byte from [4.7.2-windows-msvc.1](https://github.com/cdd1037/godot-template/releases/tag/4.7.2-windows-msvc.1). Download both EXE files and keep them together.
+          - Linux x64: official Linux SDK recipe, copied byte-for-byte from [4.7.2-slim.1](https://github.com/cdd1037/godot-template/releases/tag/4.7.2-slim.1). No RELR.
+          - macOS ARM64 only: native Xcode 26.1.1 build, copied byte-for-byte from 4.7.2-slim.1. The ZIP contains the template app.
+          - Same slim configuration: Compatibility/native OpenGL, .NET enabled, AccessKit disabled, Graphite and shared public 3D APIs retained. No bundled .NET runtime.
+          - Engine source: ed1daf0bf001b61586d9930840f2f1394092c079 (4.7.2-stable).
+          - Build provenance: [Linux/macOS run](https://github.com/cdd1037/godot-template/actions/runs/39565398548), [Windows MSVC run](https://github.com/cdd1037/godot-template/actions/runs/39571907775). Separate build evidence remains in the originating Actions artifacts with their original retention period.
+          - SHA256SUMS covers all four template assets. The source archive for this release contains the packaging workflow, not newly compiled engine binaries.
+          - Use matching Godot 4.7.2 .NET editor assemblies, select the release custom template, and disable debug export. Windows custom template is the EXE without ".console" in its filename.
+          - Historical releases remain available; this unified release is the current download entry point.
+          NOTES
+          gh release create "$tag" --target "$GITHUB_SHA" --draft \
+            --title "Godot 4.7.2 slim .NET desktop templates — $tag" \
+            --notes-file RELEASE_NOTES.md assets/*
+          # Verify the uploaded draft by downloading it before making it public/latest.
+          mkdir verified
+          gh release download "$tag" --dir verified
+          cmp assets/SHA256SUMS verified/SHA256SUMS
+          (cd verified && sha256sum -c SHA256SUMS)
+          gh release edit "$tag" --draft=false --latest
+          test "$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)" = "$tag"
