@@ -8,7 +8,9 @@ $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.e
 $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
 if (-not $vs) { throw 'Visual Studio 2022 C++ x64 build tools not found; no fallback to MinGW.' }
 $devcmd = Join-Path $vs 'Common7/Tools/VsDevCmd.bat'
-$lines = & cmd.exe /d /s /c "`"`"$devcmd`" -no_logo -arch=x64 -host_arch=x64 && set`""
+$setupCmd = Join-Path $env:RUNNER_TEMP 'godot-msvc-environment.cmd'
+@('@echo off', "call `"$devcmd`" -no_logo -arch=x64 -host_arch=x64", 'if errorlevel 1 exit /b %errorlevel%', 'set') | Set-Content -Encoding ascii $setupCmd
+$lines = & cmd.exe /d /c $setupCmd
 if ($LASTEXITCODE -ne 0) { throw 'VsDevCmd failed' }
 foreach ($line in $lines) {
     if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
