@@ -1,0 +1,11 @@
+--- godot-4.7.2/platform/windows/SCsub	2026-10-21 13:22:03.543493646 +0900
++++ godot-win-4.7.2/platform/windows/SCsub	2026-10-21 15:38:41.802536394 +0900
+@@ -43,6 +43,8 @@
+ ]
+ 
+ env_wrap = env.Clone()
++# Keep independent maps for the two PE outputs.
++env_wrap["LINKFLAGS"] = [str(f).replace("windows_main.map", "windows_console.map") for f in env_wrap["LINKFLAGS"]]
+ 
+ if env["arch"] == "x86_64" and env["library_type"] == "executable":
+     env_cpp_check = env.Clone()
