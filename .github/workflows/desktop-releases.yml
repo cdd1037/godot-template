@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'New tag (4.7.2-slim.N); blank uses run number'
+        description: 'New tag (4.7.2-slim.N); blank selects next available numeric suffix'
         required: false
         type: string
 permissions:
@@ -106,10 +106,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag="${REQUESTED_TAG:-4.7.2-slim.${GITHUB_RUN_NUMBER}}"
+          # Fetch every tag; unlike REST listing this has no pagination limit.
+          git fetch --tags origin
+          if [[ -n "${REQUESTED_TAG:-}" ]]; then
+            tag="$REQUESTED_TAG"
+          else
+            # Ignore other tag families and non-numeric suffixes.
+            tag=$(git tag --list '4.7.2-slim.*' | python3 -c 'import re, sys; ns = [int(m.group(1)) for s in sys.stdin if (m := re.fullmatch(r"4\.7\.2-slim\.([0-9]+)", s.strip()))]; print("4.7.2-slim." + str(max(ns, default=0) + 1))')
+          fi
           [[ "$tag" =~ ^4\.7\.2-slim\.[0-9]+$ ]] || { echo 'Invalid release tag'; exit 1; }
           # The create API itself refuses an existing release; also reject an existing tag.
-          git fetch --tags origin
           ! git rev-parse -q --verify "refs/tags/$tag" || { echo 'Tag already exists; choose a new suffix'; exit 1; }
           cd release-assets
           test -f windows_release_x86_64.exe
