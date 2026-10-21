@@ -7,6 +7,10 @@
   "linux_glibc_baseline": "2.28",
   "macos_sdk": "26.1",
   "macos_xcode": "26.1.1",
-  "note": "Linux/Windows use pinned official 4.7 Dockerfile recipes, not bit-reproducible official images: upstream Fedora tags/packages remain mutable. macOS uses approved native Xcode, not official osxcross binaries.",
-  "macos_mode": "User-approved GitHub macos-15 ARM64 runner, native Xcode 26.1.1 (17B100), SDK 26.1"
+  "note": "Linux uses pinned official 4.7 Dockerfile recipes (upstream Fedora tags/packages remain mutable). Windows uses native MSVC on windows-2022; exact installed toolset and SDK recorded in evidence. macOS uses approved native Xcode, not official osxcross binaries.",
+  "macos_mode": "User-approved GitHub macos-15 ARM64 runner, native Xcode 26.1.1 (17B100), SDK 26.1",
+  "windows_runner": "windows-2022",
+  "windows_msvc_family": "14.3 / Visual Studio 2022",
+  "windows_scons": "4.10.1",
+  "windows_symbols": "debug_symbols=no; MSVC /DEBUG:NONE and separate /MAP evidence; no GNU strip"
 }
