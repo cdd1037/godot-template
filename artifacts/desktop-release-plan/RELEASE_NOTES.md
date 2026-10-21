@@ -8,6 +8,6 @@ In the matching Godot 4.7.2 .NET editor, select each asset under the export pres
 
 Compatibility renderer / native OpenGL only. AccessKit, GDScript, VisualShader, regex, camera, Theora, BMP/TGA/HDR/TinyEXR, 3D physics/navigation implementations, XR implementations and network modules are disabled. Full public 3D API, GDExtension and Graphite are retained. No Vulkan, D3D12, ANGLE or Metal.
 
-Linux/Windows use the pinned official 4.7 release-container recipes. macOS uses the user-approved native GitHub Apple Silicon runner with Xcode 26.1.1 / SDK 26.1, rather than the official private osxcross image. All use speed optimization and full LTO. macOS templates are unsigned/unnotarized; sign/notarize final games as appropriate.
+Linux uses the pinned official 4.7 release-container recipe. Windows uses native Visual Studio 2022 MSVC (static C++ runtime, no bundled .NET runtime). macOS uses the user-approved native GitHub Apple Silicon runner with Xcode 26.1.1 / SDK 26.1, rather than the official private osxcross image. All use speed optimization and full LTO. macOS templates are unsigned/unnotarized; sign/notarize final games as appropriate.
 
 `SHA256SUMS` verifies assets. Separate build logs, compiler/package provenance and symbol evidence are in this workflow run's Actions artifacts. The workflow performs no game launches, runtime smoke tests or size comparisons.
