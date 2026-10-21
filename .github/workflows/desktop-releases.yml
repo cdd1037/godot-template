@@ -1,4 +1,4 @@
-name: Slim .NET desktop release templates (official toolchains)
+name: Slim .NET desktop release templates (Linux official SDK, Windows MSVC, native macOS)
 on:
   push:
     branches: [main]
@@ -27,7 +27,7 @@ jobs:
           - platform: linux
             runner: ubuntu-24.04
           - platform: windows
-            runner: ubuntu-24.04
+            runner: windows-2022
           - platform: macos
             runner: macos-15
     steps:
@@ -40,23 +40,36 @@ jobs:
           path: engine
           persist-credentials: false
       - name: Check out official release container recipes (4.7)
-        if: matrix.platform != 'macos'
+        if: matrix.platform == 'linux'
         uses: actions/checkout@v4
         with:
           repository: godotengine/build-containers
           ref: 3f3cc50c3f91c2be66e37aece9d9a57284e39db7
           path: official-containers
           persist-credentials: false
-      - name: Build Linux/Windows using official container recipes
-        if: matrix.platform != 'macos'
+      - name: Build Linux using official container recipes
+        if: matrix.platform == 'linux'
         env:
           PLATFORM: ${{ matrix.platform }}
         run: bash artifacts/desktop-release-plan/run-container.sh "$PLATFORM"
       - name: Set up Python for pinned SCons
-        if: matrix.platform == 'macos'
+        if: matrix.platform != 'linux'
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Install pinned Windows build orchestrator
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          python -m pip install scons==4.10.1
+          if ($LASTEXITCODE -ne 0) { throw 'SCons installation failed' }
+      - name: Build Windows x86_64 with native MSVC (no execution)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf8
+          SCONS_CACHE_MSVC_CONFIG: 'true'
+        run: ./artifacts/desktop-release-plan/build-windows-msvc.ps1
       - name: Build Apple Silicon using approved native Xcode 26.1.1
         if: matrix.platform == 'macos'
         run: bash artifacts/desktop-release-plan/build-macos.sh
