@@ -1,0 +1,144 @@
+name: TEMP Compatibility-only full-module MSVC size experiment
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/temp-compatibility-msvc-test.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: temp-compatibility-msvc-test
+  cancel-in-progress: false
+jobs:
+  compatibility-msvc:
+    runs-on: windows-2022
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      PYTHONIOENCODING: utf8
+      SCONS_CACHE_MSVC_CONFIG: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out clean pinned engine
+        uses: actions/checkout@v4
+        with:
+          repository: godotengine/godot
+          ref: ed1daf0bf001b61586d9930840f2f1394092c079
+          path: engine
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: x64
+      - name: Install dependencies using pinned upstream scripts
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist/evidence | Out-Null
+          python -m pip install scons==4.10.1 mako==1.3.10
+          if ($LASTEXITCODE -ne 0) { throw 'Python dependency installation failed' }
+          Copy-Item .github/workflows/temp-compatibility-msvc-test.yml dist/evidence/workflow.yml
+      - name: Compile full Windows x64 .NET release and inspect PE (no execution)
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = $env:GITHUB_WORKSPACE
+          if (-not $root) { throw 'Run in the prepared GitHub Actions workspace.' }
+          $plan = Join-Path $root 'artifacts/desktop-release-plan'
+          $reports = Join-Path $root 'dist/evidence'
+          New-Item -ItemType Directory -Force $reports | Out-Null
+          $assets = Join-Path $root 'dist/assets'
+          New-Item -ItemType Directory -Force $assets | Out-Null
+          $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
+          $vs = & $vswhere -latest -version '[17.0,18.0)' -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw 'Visual Studio 2022 C++ x64 build tools not found; no fallback to MinGW.' }
+          $devcmd = Join-Path $vs 'Common7/Tools/VsDevCmd.bat'
+          $setupCmd = Join-Path $env:RUNNER_TEMP 'godot-msvc-environment.cmd'
+          @('@echo off', "call `"$devcmd`" -no_logo -arch=x64 -host_arch=x64", 'if errorlevel 1 exit /b %errorlevel%', 'set') | Set-Content -Encoding ascii $setupCmd
+          $lines = & cmd.exe /d /c $setupCmd
+          if ($LASTEXITCODE -ne 0) { throw 'VsDevCmd failed' }
+          foreach ($line in $lines) {
+              if ($line -match '^([^=]+)=(.*)$') { [Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process') }
+          }
+          Set-Location (Join-Path $root 'engine')
+          $commit = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $commit -ne 'ed1daf0bf001b61586d9930840f2f1394092c079') { throw 'Source revision mismatch' }
+          if (Test-Path custom.py) { throw 'Unexpected custom.py: full build must use clean upstream defaults' }
+          @("Source: $commit", "VS: $vs", "VCToolsVersion: $env:VCToolsVersion", "WindowsSDKVersion: $env:WindowsSDKVersion", "Runner image: $env:ImageOS $env:ImageVersion", 'Debug symbols: no; native MSVC /DEBUG:NONE, no GNU strip') | Set-Content "$reports/toolchain.txt"
+          Get-Command cl.exe,link.exe | Format-List Name,Source | Out-String | Add-Content "$reports/toolchain.txt"
+          python --version 2>&1 | Add-Content "$reports/toolchain.txt"
+          python -m SCons --version 2>&1 | Add-Content "$reports/toolchain.txt"
+          'No custom.py, build_profile, or module blacklist. Upstream Windows module defaults plus Mono; unsupported/platform-only modules follow upstream can_build.' | Set-Content "$reports/config-policy.txt"
+          
+          # Match the verified no-g MSVC baseline. /MAP preserves linker evidence without
+          # introducing release PE debug-directory overhead. No external strip utility.
+          $symbols = 'no'
+          $jobs = [Math]::Min(4, [Environment]::ProcessorCount)
+          $sconsArgs = @("-j$jobs", 'platform=windows', 'arch=x86_64', 'target=template_release', 'production=yes', 'optimize=speed', 'lto=full', 'use_mingw=no', 'use_llvm=no', 'msvc_version=14.3', 'use_static_cpp=yes', 'incremental_link=no', 'winrt=yes', 'windows_subsystem=gui', 'opengl3=yes', 'linkflags=/MAP /OPT:REF /OPT:ICF', 'd3d12=no', 'vulkan=no', 'use_volk=no', 'angle=no', 'metal=no', 'accesskit=no', 'graphite=yes', 'module_mono_enabled=yes', 'modules_enabled_by_default=yes', 'threads=yes', 'tests=no', "debug_symbols=$symbols", 'verbose=yes')
+          ('python -m SCons ' + ($sconsArgs -join ' ')) | Add-Content "$reports/toolchain.txt"
+          'No ANGLE/D3D12 dependencies required: those backends are disabled.' | Set-Content "$reports/dependency-policy.txt"
+          $start = Get-Date
+          python -m SCons @sconsArgs 2>&1 | Tee-Object "$reports/build.log"
+          $result = $LASTEXITCODE
+          foreach ($f in @('modules/modules_enabled.gen.h', 'modules/register_module_types.gen.cpp', 'core/version_generated.gen.h')) {
+              if (Test-Path $f) { Copy-Item $f $reports }
+          }
+          
+          "Elapsed seconds: $((Get-Date).Subtract($start).TotalSeconds)" | Add-Content "$reports/toolchain.txt"
+          # Preserve native maps/PDBs as evidence, including after a failed build.
+          # /MAP without a filename creates separate main/console output maps.
+          $symbolDir = Join-Path $reports 'symbols'
+          New-Item -ItemType Directory -Force $symbolDir | Out-Null
+          Get-ChildItem -Path . -File -Recurse | Where-Object { $_.Extension -in '.map', '.pdb' } | ForEach-Object {
+              $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $_.FullName)
+              $destination = Join-Path $symbolDir $relative
+              New-Item -ItemType Directory -Force (Split-Path $destination) | Out-Null
+              Copy-Item $_.FullName $destination
+          }
+          if ($result -ne 0) { throw "SCons failed with exit code $result" }
+          $binary = Join-Path (Get-Location).Path 'bin/godot.windows.template_release.x86_64.mono.exe'
+          $wrapper = [IO.Path]::ChangeExtension($binary, '.console.exe')
+          foreach ($file in @($binary, $wrapper)) {
+              if (-not (Test-Path $file) -or (Get-Item $file).Length -eq 0) { throw "Missing output: $file" }
+              $mapName = [IO.Path]::GetFileNameWithoutExtension($file) + '.map'
+              if (-not (Get-ChildItem $symbolDir -Recurse -File -Filter $mapName)) { throw "Missing linker map: $mapName" }
+              # Static inspection only; never launch the built template/wrapper.
+              & dumpbin.exe /headers /dependents $file | Set-Content (Join-Path $reports ((Split-Path $file -Leaf) + '.headers.txt'))
+              if ($LASTEXITCODE -ne 0) { throw "dumpbin failed for $file" }
+          }
+          'No PDB requested: debug_symbols=no (/DEBUG:NONE). MAP files are the native symbol evidence; any incidental PDBs are retained separately, never published.' | Set-Content "$reports/symbol-policy.txt"
+          
+          $log = [IO.File]::ReadAllText("$reports/build.log")
+          foreach ($macro in @('GLES3_ENABLED')) {
+              if (-not $log.Contains($macro)) { throw "Backend/module compilation macro not found: $macro" }
+          }
+          foreach ($macro in @('D3D12_ENABLED', 'ANGLE_ENABLED', 'VULKAN_ENABLED', 'METAL_ENABLED')) {
+              if ($log.Contains($macro)) { throw "Unexpected disabled backend macro: $macro" }
+          }
+          if ($log.Contains('ACCESSKIT_ENABLED')) { throw 'AccessKit unexpectedly enabled' }
+          if (-not (Select-String -Quiet -Path modules/modules_enabled.gen.h -Pattern 'MODULE_MONO_ENABLED')) { throw 'Mono absent from generated module list' }
+          $measurements = foreach ($file in @($binary, $wrapper)) {
+              Copy-Item $file $assets
+              [pscustomobject]@{name=(Split-Path $file -Leaf); bytes=(Get-Item $file).Length; MiB=((Get-Item $file).Length / 1MB); sha256=(Get-FileHash $file -Algorithm SHA256).Hash.ToLower()}
+          }
+          $measurements | ConvertTo-Json | Set-Content "$reports/measurements.json"
+          $measurements | ForEach-Object { "$($_.sha256)  $($_.name)" } | Set-Content "$assets/SHA256SUMS"
+          $measurements | Format-Table -AutoSize | Out-String | Tee-Object -FilePath "$reports/size.txt"
+          $mainBytes = (Get-Item $binary).Length
+          @("## Temporary Compatibility-only full-module MSVC experiment", "Source: $commit", "Main EXE: $mainBytes bytes ($($mainBytes / 1MB) MiB)", "Full-backend MSVC baseline: 87371776 bytes", "Difference: $($mainBytes - 87371776) bytes ($((($mainBytes - 87371776) / 87371776) * 100)%)", "Native OpenGL Compatibility only; Vulkan/D3D12/ANGLE/Metal disabled; default supported modules + Mono; AccessKit off; full LTO; speed; no runtime test.", 'No ANGLE or D3D12 backend dependencies. This artifact is a compilation experiment, not a complete game distribution.') | Out-File -Append $env:GITHUB_STEP_SUMMARY
+      - name: Retain EXE pair and SHA256 (no Release publication)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temp-compatibility-msvc-templates
+          path: dist/assets/
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Retain configuration, module list, toolchain, logs, maps and sizes
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: temp-compatibility-msvc-evidence
+          path: dist/evidence/
+          retention-days: 30
+          if-no-files-found: warn
